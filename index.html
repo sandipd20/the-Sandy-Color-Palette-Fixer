@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>the Sandy Color Palette Fixer — diagnose &amp; fix your color palette</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <div class="beam" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="wordmark">
+      <span class="wordmark-eyebrow">the</span>
+      <span class="wordmark-title">Sandy Color Palette Fixer</span>
+    </div>
+    <p class="tagline">Diagnose your color palette's flaws. Apply one‑click fixes. 60 seconds.</p>
+  </header>
+
+  <main class="page">
+
+    <!-- ============ FILE IMPORT ============ -->
+    <section class="card upload-card" aria-labelledby="upload-heading">
+      <div class="card-title-row">
+        <h3 id="upload-heading">Import colors from your files</h3>
+      </div>
+      <p class="card-sub">Upload HTML or CSS files — Palette Fixer pulls every color it finds into your palette. Fix
+        them here and the corrected colors get written straight back into your files.</p>
+
+      <label class="dropzone" id="dropzone" tabindex="0">
+        <input type="file" id="fileInput" multiple accept=".html,.htm,.css" hidden>
+        <span class="dropzone-icon">⇪</span>
+        <span class="dropzone-text"><strong>Drop files here</strong> or click to browse</span>
+        <span class="dropzone-hint">.html and .css files, processed locally in your browser</span>
+      </label>
+
+      <div id="extractedPanel"></div>
+      <div id="filesPanel"></div>
+    </section>
+
+    <!-- ============ DESIGN IMAGE + AI FEEDBACK ============ -->
+    <section class="card design-card" aria-labelledby="design-heading">
+      <div class="card-title-row">
+        <h3 id="design-heading">Upload a design for color feedback</h3>
+      </div>
+      <p class="card-sub">Drop a screenshot, mockup, or artwork — Palette Fixer pulls its dominant colors, and can ask
+        AI for design feedback using your own OpenAI API key.</p>
+
+      <label class="dropzone" id="imageDropzone" tabindex="0">
+        <input type="file" id="imageInput" accept="image/*" hidden>
+        <span class="dropzone-icon">🖼</span>
+        <span class="dropzone-text"><strong>Drop an image here</strong> or click to browse</span>
+        <span class="dropzone-hint">PNG, JPG, or WebP — colors are extracted locally in your browser</span>
+      </label>
+
+      <div id="designPreviewPanel"></div>
+
+      <div class="ai-feedback-block" id="aiFeedbackBlock" style="display:none;">
+        <div class="ai-divider"></div>
+        <div class="ai-head">
+          <h4>Ask AI for design feedback</h4>
+          <p class="card-sub">Uses your own OpenAI API key, sent directly from your browser to OpenAI's API. We never
+            see or store it.</p>
+        </div>
+
+        <div class="ai-key-row">
+          <input type="password" id="apiKeyInput" class="hex-input ai-key-input" placeholder="sk-...">
+          <button class="btn-ghost small" id="toggleKeyVisibility" type="button">Show</button>
+        </div>
+        <div class="ai-key-sub">
+          <label class="ai-save-toggle"><input type="checkbox" id="saveKeyToggle" checked> Remember on this
+            device</label>
+          <button class="btn-ghost small" id="clearKeyBtn" type="button" style="display:none;">Clear saved key</button>
+        </div>
+        <p class="ai-key-note">Get a key at <strong>platform.openai.com/api-keys</strong> — that's separate from your
+          chatgpt.com login and needs a funded API account.</p>
+
+        <button class="btn-primary" id="getFeedbackBtn">Get design feedback</button>
+        <div id="feedbackOutput"></div>
+      </div>
+    </section>
+
+    <div class="layout">
+
+      <!-- ============ LEFT: WORKSPACE ============ -->
+      <section class="workspace" aria-labelledby="workspace-heading">
+        <div class="panel-head">
+          <h2 id="workspace-heading">01 — Build your palette</h2>
+          <div class="panel-actions">
+            <button class="btn-ghost" id="importBtn">Load starter</button>
+            <button class="btn-ghost" id="clearBtn">Clear</button>
+          </div>
+        </div>
+
+        <div class="add-color-row">
+          <label class="swatch-picker">
+            <input type="color" id="colorPicker" value="#5B3DF6" aria-label="Pick a color">
+            <span class="swatch-picker-swirl"></span>
+          </label>
+          <input type="text" id="hexInput" class="hex-input" placeholder="#RRGGBB" maxlength="7">
+          <select id="roleInput" class="role-select">
+            <option value="accent">Accent</option>
+            <option value="hero">Hero</option>
+            <option value="light">Light Neutral</option>
+            <option value="dark">Dark Neutral</option>
+          </select>
+          <button class="btn-primary" id="addColorBtn">Add color</button>
+        </div>
+
+        <div class="palette-grid" id="paletteGrid"></div>
+        <p class="empty-note" id="emptyNote">No colors yet — add your first one above, or hit Import to load a starter
+          palette.</p>
+      </section>
+
+      <!-- ============ RIGHT: DIAGNOSTICS ============ -->
+      <aside class="diagnostics">
+
+        <!-- Health -->
+        <div class="card health-card">
+          <div class="health-top">
+            <div>
+              <h3>Palette Health</h3>
+              <p class="card-sub">How complete and accessible your palette is.</p>
+            </div>
+            <div class="health-ring-wrap">
+              <svg viewBox="0 0 120 120" class="health-ring">
+                <circle cx="60" cy="60" r="52" class="ring-track"></circle>
+                <circle cx="60" cy="60" r="52" class="ring-progress" id="ringProgress"></circle>
+              </svg>
+              <div class="health-ring-label"><span id="healthPercent">0</span>%</div>
+            </div>
+          </div>
+          <ul class="checklist" id="checklist"></ul>
+        </div>
+
+        <!-- Smart Suggestions -->
+        <div class="card">
+          <div class="card-title-row">
+            <h3>Smart Palette Suggestions™</h3>
+          </div>
+          <p class="card-sub">Tailored to your palette's hue &amp; contrast relationships.</p>
+          <div class="suggestions" id="suggestions"></div>
+        </div>
+
+        <!-- Harmony Check -->
+        <div class="card">
+          <div class="card-title-row">
+            <h3>Harmony Check</h3>
+            <button class="btn-ghost small" id="rescanBtn">Rescan</button>
+          </div>
+          <p class="card-sub" id="harmonySummary">Scan for colors that don't fit your palette's harmony.</p>
+          <div id="harmonyIssues"></div>
+        </div>
+
+        <!-- Contrast Testing -->
+        <div class="card">
+          <div class="card-title-row">
+            <h3>Contrast Testing</h3>
+            <span class="pill" id="contrastCount">0 / 0 AA</span>
+          </div>
+          <p class="card-sub">Select at least 4 pairings to lock in your health score.</p>
+          <div class="contrast-list" id="contrastList"></div>
+        </div>
+
+        <!-- Export -->
+        <div class="card">
+          <div class="card-title-row">
+            <h3>Export &amp; use your colors</h3>
+          </div>
+          <div class="export-list">
+            <button class="export-row" id="exportCopy">
+              <span><strong>Copy hex codes</strong><br><small>All colors as a comma‑separated list</small></span>
+              <span class="export-icon">⧉</span>
+            </button>
+            <button class="export-row" id="exportCSS">
+              <span><strong>CSS variables</strong><br><small>Custom properties for modern CSS</small></span>
+              <span class="export-icon">↓</span>
+            </button>
+            <button class="export-row" id="exportJSON">
+              <span><strong>JSON</strong><br><small>Palette data for design tools &amp; code</small></span>
+              <span class="export-icon">↓</span>
+            </button>
+            <button class="export-row" id="exportSVG">
+              <span><strong>SVG swatch sheet</strong><br><small>Scalable vector graphic of your palette</small></span>
+              <span class="export-icon">↓</span>
+            </button>
+          </div>
+        </div>
+
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <div class="footer-wordmark">the Sandy Color Palette Fixer</div>
+        <p class="footer-tagline">Diagnose, harmonize, and export accessible color palettes — right in your browser.</p>
+      </div>
+      <div class="footer-meta">
+        <span class="footer-dot" aria-hidden="true"></span>
+        <p>All parsing and fixes run locally. Nothing you upload ever leaves your browser.</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>Sandip Shrestha &copy; 2026</span>
+      <span class="footer-swatches" aria-hidden="true">
+        <i style="background:#FCAC9E"></i><i style="background:#ECC995"></i><i style="background:#78CCD4"></i><i
+          style="background:#EAC4F6"></i><i style="background:#5B3DF6"></i>
+      </span>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
