@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>the Sandy Color Palette Fixer — diagnose &amp; fix your color palette</title>
+  <title>Sandy Color Palette Fixer — diagnose &amp; fix your color palette</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
@@ -31,8 +31,8 @@
       <div class="card-title-row">
         <h3 id="upload-heading">Import colors from your files</h3>
       </div>
-      <p class="card-sub">Upload HTML or CSS files — Palette Fixer pulls every color it finds into your palette. Fix
-        them here and the corrected colors get written straight back into your files.</p>
+      <p class="card-sub">Upload HTML or CSS files — Sandy Color Palette Fixer pulls every color it finds into your
+        palette. Fix them here and the corrected colors get written straight back into your files.</p>
 
       <label class="dropzone" id="dropzone" tabindex="0">
         <input type="file" id="fileInput" multiple accept=".html,.htm,.css" hidden>
@@ -50,8 +50,8 @@
       <div class="card-title-row">
         <h3 id="design-heading">Upload a design for color feedback</h3>
       </div>
-      <p class="card-sub">Drop a screenshot, mockup, or artwork — Palette Fixer pulls its dominant colors, and can ask
-        AI for design feedback using your own OpenAI API key.</p>
+      <p class="card-sub">Drop a screenshot, mockup, or artwork — Sandy Color Palette Fixer pulls its dominant colors,
+        and can ask AI for design feedback using your own OpenAI API key.</p>
 
       <label class="dropzone" id="imageDropzone" tabindex="0">
         <input type="file" id="imageInput" accept="image/*" hidden>
@@ -62,16 +62,35 @@
 
       <div id="designPreviewPanel"></div>
 
-      <div class="ai-feedback-block" id="aiFeedbackBlock" style="display:none;">
+      <div class="ai-feedback-block" id="aiFeedbackBlock">
+        <div class="free-review-row">
+          <div>
+            <h4>Get instant feedback</h4>
+            <p class="card-sub">A free, rule-based review of your palette — contrast, harmony, and completeness. Runs
+              entirely in your browser, no account needed.</p>
+          </div>
+          <button class="btn-primary" id="getFreeReviewBtn">Free instant review</button>
+        </div>
+        <div id="freeReviewOutput"></div>
+
         <div class="ai-divider"></div>
+
         <div class="ai-head">
-          <h4>Ask AI for design feedback</h4>
-          <p class="card-sub">Uses your own OpenAI API key, sent directly from your browser to OpenAI's API. We never
-            see or store it.</p>
+          <h4>Want deeper, AI-generated feedback?</h4>
+          <p class="card-sub">Optional. Pick a provider and bring your own key — sent directly from your browser to that
+            provider's API. We never see or store it.</p>
+        </div>
+
+        <div class="provider-row">
+          <select id="providerSelect" class="role-select provider-select">
+            <option value="gemini">Google Gemini — free tier</option>
+            <option value="openrouter">OpenRouter — free models</option>
+            <option value="openai">OpenAI — paid</option>
+          </select>
         </div>
 
         <div class="ai-key-row">
-          <input type="password" id="apiKeyInput" class="hex-input ai-key-input" placeholder="sk-...">
+          <input type="password" id="apiKeyInput" class="hex-input ai-key-input" placeholder="AIza...">
           <button class="btn-ghost small" id="toggleKeyVisibility" type="button">Show</button>
         </div>
         <div class="ai-key-sub">
@@ -79,11 +98,13 @@
             device</label>
           <button class="btn-ghost small" id="clearKeyBtn" type="button" style="display:none;">Clear saved key</button>
         </div>
-        <p class="ai-key-note">Get a key at <strong>platform.openai.com/api-keys</strong> — that's separate from your
-          chatgpt.com login and needs a funded API account.</p>
+        <p class="ai-key-note" id="providerNote">Get a free key at <strong>aistudio.google.com/apikey</strong> — no
+          credit card needed. Free tier supports image input and roughly 15 requests/minute.</p>
 
-        <button class="btn-primary" id="getFeedbackBtn">Get design feedback</button>
+        <button class="btn-primary" id="getFeedbackBtn">Get AI design feedback</button>
         <div id="feedbackOutput"></div>
+        <div class="ai-stale-note" id="aiStaleNote" style="display:none;">⚠ Your palette or image changed since this
+          review — click the button above to refresh it.</div>
       </div>
     </section>
 
@@ -167,6 +188,16 @@
           </div>
           <p class="card-sub">Select at least 4 pairings to lock in your health score.</p>
           <div class="contrast-list" id="contrastList"></div>
+        </div>
+
+        <!-- Color-Blind Safety -->
+        <div class="card">
+          <div class="card-title-row">
+            <h3>Color-Blind Safety Check</h3>
+          </div>
+          <p class="card-sub">Simulates how your palette looks under the three most common forms of color blindness, and
+            flags colors that become hard to tell apart.</p>
+          <div id="colorBlindResults"></div>
         </div>
 
         <!-- Export -->

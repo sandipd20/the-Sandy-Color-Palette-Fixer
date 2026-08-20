@@ -1,5 +1,5 @@
 /* ============================================
-   the Sandy Color Palette Fixer — app logic
+   Palette Fixer — app logic
    ============================================ */
 
 /* ---------- color math ---------- */
@@ -660,15 +660,11 @@ function addDesignColorsToPalette() {
 
 function renderDesignPanel() {
   const panel = document.getElementById('designPreviewPanel');
-  const aiBlock = document.getElementById('aiFeedbackBlock');
 
   if (!designImage) {
     panel.innerHTML = '';
-    aiBlock.style.display = 'none';
     return;
   }
-  aiBlock.style.display = 'block';
-
   const selectedCount = designColors.filter(c => c.selected).length;
   panel.innerHTML = `
     <div class="design-preview">
@@ -702,21 +698,149 @@ function renderDesignPanel() {
   document.getElementById('removeDesignImgBtn').onclick = removeDesignImage;
 }
 
-/* ---------- AI design feedback (bring-your-own OpenAI key) ---------- */
-const OPENAI_KEY_STORAGE = 'paletteFixer_openaiKey';
+/* ---------- free instant review (rule-based, no API needed) ---------- */
+function nearestPaletteDistance(hex, list) {
+  const a = hexToRgb(hex);
+  let best = Infinity;
+  list.forEach(h => {
+    const b = hexToRgb(h);
+    const d = Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
+    if (d < best) best = d;
+  });
+  return best;
+}
+
+function generateFreeReview() {
+  const bullets = [];
+  const health = computeHealth();
+
+  // 1. overall health
+  if (health.percent >= 80) {
+    bullets.push(`Your palette's in good shape — **${health.percent}% health score**, with most of the essentials covered.`);
+  } else if (health.percent >= 45) {
+    bullets.push(`Your palette is **${health.percent}% complete**. A few checklist items in the Health card are still unmet — worth closing those out before you ship it.`);
+  } else {
+    bullets.push(`Health score is **${health.percent}%** — this palette is still early. Add more colors and a light/dark neutral to round it out.`);
+  }
+
+  // 2. color count / composition
+  if (palette.length < 3) {
+    bullets.push(`Only **${palette.length} color${palette.length === 1 ? '' : 's'}** in the palette. Most interfaces need at least a hero, one or two accents, and a neutral pair to feel intentional.`);
+  } else if (palette.length > 9) {
+    bullets.push(`**${palette.length} colors** is a lot to keep consistent. Consider consolidating near-duplicates into a smaller, more disciplined set — it usually reads as more confident design, not less.`);
+  }
+  if (!palette.some(c => c.role === 'light')) bullets.push(`No **light neutral** assigned — you'll want one for backgrounds and light surfaces.`);
+  if (!palette.some(c => c.role === 'dark')) bullets.push(`No **dark neutral** assigned — you'll want one for body text and dark UI elements.`);
+
+  // 3. harmony
+  const harmonyIssues = computeHarmonyIssues();
+  if (harmonyIssues.length) {
+    const issue = harmonyIssues[0];
+    bullets.push(`**${issue.current}** reads noticeably more saturated than the rest of the palette. Try pulling it toward **${issue.suggested}** to keep the set feeling cohesive.`);
+    if (harmonyIssues.length > 1) {
+      bullets.push(`${harmonyIssues.length - 1} other color${harmonyIssues.length > 2 ? 's' : ''} could use the same treatment — see the Harmony Check card for each fix.`);
+    }
+  } else if (palette.length >= 2) {
+    bullets.push(`Saturation is consistent across the palette — no jarring outliers pulling focus.`);
+  }
+
+  // 4. contrast
+  const coverage = contrastCoverage();
+  if (palette.length > 0) {
+    if (coverage.percent >= 90) {
+      bullets.push(`Accessibility looks solid: **${coverage.percent}%** of your colors have at least one WCAG AA-passing text pairing.`);
+    } else if (coverage.percent >= 60) {
+      bullets.push(`**${coverage.percent}%** of colors pass AA contrast against dark or light text. Check the Contrast Testing card for the ones that don't — they'll be hard to read as text or on top of text.`);
+    } else {
+      bullets.push(`Only **${coverage.percent}%** of colors pass AA contrast — accessibility needs attention here before this palette goes into a real interface.`);
+    }
+  }
+
+  // 5. hero/accent balance
+  const heroCount = palette.filter(c => c.role === 'hero').length;
+  const accentCount = palette.filter(c => c.role === 'accent').length;
+  if (heroCount > 1) {
+    bullets.push(`**${heroCount} colors** are marked Hero. Usually one hero color anchors a design best — the rest read more clearly as accents.`);
+  }
+  if (heroCount === 0 && accentCount > 0) {
+    bullets.push(`No color is marked **Hero**. Picking one primary color to lead the palette usually makes a design feel more intentional than an even spread of accents.`);
+  }
+
+  // 6. tie to uploaded design, if present
+  if (designImage && designColors.length) {
+    const paletteHexes = palette.map(c => c.hex);
+    const matched = designColors.filter(d => nearestPaletteDistance(d.hex, paletteHexes) < 40).length;
+    if (paletteHexes.length === 0) {
+      bullets.push(`Your uploaded design has its own dominant colors — add them to the palette above so the rest of this review can check them too.`);
+    } else if (matched === 0) {
+      bullets.push(`None of the dominant colors pulled from your uploaded image closely match your current palette — the design and the palette may have drifted apart.`);
+    } else if (matched < designColors.length) {
+      bullets.push(`${matched} of ${designColors.length} dominant colors from your design match the palette — the rest may be worth folding in or reconciling.`);
+    } else {
+      bullets.push(`Every dominant color in your uploaded design is represented in the palette — good consistency between the two.`);
+    }
+  }
+
+  return bullets;
+}
+
+function renderFreeReview() {
+  const out = document.getElementById('freeReviewOutput');
+  if (palette.length === 0 && !designImage) {
+    out.innerHTML = `<div class="feedback-error">Add some colors or upload a design image first, so there's something to review.</div>`;
+    return;
+  }
+  freeReviewHasRun = true;
+  const bullets = generateFreeReview();
+  const bold = (s) => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  out.innerHTML = `<div class="feedback-text"><ul>${bullets.map(b => `<li>${bold(b)}</li>`).join('')}</ul></div>`;
+}
+
+document.getElementById('getFreeReviewBtn').onclick = renderFreeReview;
+
+/* ---------- AI design feedback (bring-your-own key, multiple providers) ---------- */
+const PROVIDERS = {
+  gemini: {
+    storageKey: 'paletteFixer_geminiKey',
+    keyPlaceholder: 'AIza...',
+    note: 'Get a free key at <strong>aistudio.google.com/apikey</strong> — no credit card needed. Free tier supports image input and roughly 15 requests/minute.'
+  },
+  openrouter: {
+    storageKey: 'paletteFixer_openrouterKey',
+    keyPlaceholder: 'sk-or-v1-...',
+    note: 'Get a free key at <strong>openrouter.ai/keys</strong> — no credit card needed. Uses free, community-hosted models with modest rate limits (they rotate over time).'
+  },
+  openai: {
+    storageKey: 'paletteFixer_openaiKey',
+    keyPlaceholder: 'sk-...',
+    note: 'Get a key at <strong>platform.openai.com/api-keys</strong> — separate from your chatgpt.com login, needs a funded API account, and costs a small amount per request.'
+  }
+};
+
 const apiKeyInput = document.getElementById('apiKeyInput');
 const saveKeyToggle = document.getElementById('saveKeyToggle');
 const clearKeyBtn = document.getElementById('clearKeyBtn');
 const feedbackOutput = document.getElementById('feedbackOutput');
+const providerSelect = document.getElementById('providerSelect');
+const providerNote = document.getElementById('providerNote');
 
-function initApiKeyField() {
-  const stored = localStorage.getItem(OPENAI_KEY_STORAGE);
+function currentProvider() { return PROVIDERS[providerSelect.value]; }
+
+function loadKeyForProvider() {
+  const provider = currentProvider();
+  apiKeyInput.placeholder = provider.keyPlaceholder;
+  providerNote.innerHTML = provider.note;
+  const stored = localStorage.getItem(provider.storageKey);
   if (stored) {
     apiKeyInput.value = stored;
     clearKeyBtn.style.display = 'inline-block';
+  } else {
+    apiKeyInput.value = '';
+    clearKeyBtn.style.display = 'none';
   }
 }
-initApiKeyField();
+loadKeyForProvider();
+providerSelect.addEventListener('change', loadKeyForProvider);
 
 document.getElementById('toggleKeyVisibility').onclick = (e) => {
   const btn = e.currentTarget;
@@ -725,7 +849,7 @@ document.getElementById('toggleKeyVisibility').onclick = (e) => {
   btn.textContent = showing ? 'Show' : 'Hide';
 };
 clearKeyBtn.onclick = () => {
-  localStorage.removeItem(OPENAI_KEY_STORAGE);
+  localStorage.removeItem(currentProvider().storageKey);
   apiKeyInput.value = '';
   clearKeyBtn.style.display = 'none';
   showToast('Removed saved key from this device');
@@ -750,10 +874,74 @@ function renderFeedbackMarkdownish(text) {
   return html;
 }
 
+function buildPromptText() {
+  const paletteDesc = palette.length
+    ? palette.map(c => `${c.hex} (${c.role})`).join(', ')
+    : 'No palette colors added yet.';
+  return `Review this color palette for a design project: ${paletteDesc}.\n` +
+    `Give concise, specific feedback in 4-6 short bullet points: harmony, contrast/accessibility, and one or two concrete hex-level suggestions. ` +
+    (designImage ? 'An image of the design is attached — comment on how the palette is actually used in it too.' : '');
+}
+
+const SYSTEM_PROMPT = 'You are a senior graphic designer and color-theory consultant. Be specific, reference actual hex codes given to you, and keep feedback tight and actionable.';
+
+async function callOpenAICompatible(baseUrl, key, extraHeaders) {
+  const userContent = [{ type: 'text', text: buildPromptText() }];
+  if (designImage) userContent.push({ type: 'image_url', image_url: { url: designImage.dataUrl } });
+
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, ...(extraHeaders || {}) },
+    body: JSON.stringify({
+      model: baseUrl.includes('openrouter') ? 'openrouter/free' : 'gpt-4o-mini',
+      max_tokens: 600,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userContent }
+      ]
+    })
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error?.message || `Request failed (HTTP ${res.status}).`);
+  }
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error('No feedback came back — try again.');
+  return text;
+}
+
+async function callGemini(key) {
+  const parts = [{ text: `${SYSTEM_PROMPT}\n\n${buildPromptText()}` }];
+  if (designImage) {
+    const [meta, base64] = designImage.dataUrl.split(',');
+    const mimeMatch = meta.match(/data:(.*);base64/);
+    parts.push({ inline_data: { mime_type: mimeMatch ? mimeMatch[1] : 'image/png', data: base64 } });
+  }
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ role: 'user', parts }] })
+    }
+  );
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error?.message || `Request failed (HTTP ${res.status}).`);
+  }
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join('').trim();
+  if (!text) throw new Error('No feedback came back — try again.');
+  return text;
+}
+
 async function getDesignFeedback() {
   const key = apiKeyInput.value.trim();
+  const providerKey = providerSelect.value;
+
   if (!key) {
-    feedbackOutput.innerHTML = `<div class="feedback-error">Enter your OpenAI API key first — get one at platform.openai.com/api-keys.</div>`;
+    feedbackOutput.innerHTML = `<div class="feedback-error">Enter an API key first for the selected provider.</div>`;
     return;
   }
   if (palette.length === 0 && !designImage) {
@@ -762,65 +950,34 @@ async function getDesignFeedback() {
   }
 
   if (saveKeyToggle.checked) {
-    localStorage.setItem(OPENAI_KEY_STORAGE, key);
+    localStorage.setItem(currentProvider().storageKey, key);
     clearKeyBtn.style.display = 'inline-block';
   } else {
-    localStorage.removeItem(OPENAI_KEY_STORAGE);
+    localStorage.removeItem(currentProvider().storageKey);
     clearKeyBtn.style.display = 'none';
   }
 
   feedbackOutput.innerHTML = `
     <div class="feedback-loading"><span class="feedback-spinner"></span> Asking your AI reviewer for feedback…</div>
   `;
-
-  const paletteDesc = palette.length
-    ? palette.map(c => `${c.hex} (${c.role})`).join(', ')
-    : 'No palette colors added yet.';
-
-  const userContent = [
-    {
-      type: 'text', text:
-        `Review this color palette for a design project: ${paletteDesc}.\n` +
-        `Give concise, specific feedback in 4-6 short bullet points: harmony, contrast/accessibility, and one or two concrete hex-level suggestions. ` +
-        (designImage ? 'An image of the design is attached — comment on how the palette is actually used in it too.' : '')
-    }
-  ];
-  if (designImage) {
-    userContent.push({ type: 'image_url', image_url: { url: designImage.dataUrl } });
-  }
+  document.getElementById('aiStaleNote').style.display = 'none';
 
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        max_tokens: 600,
-        messages: [
-          { role: 'system', content: 'You are a senior graphic designer and color-theory consultant. Be specific, reference actual hex codes given to you, and keep feedback tight and actionable.' },
-          { role: 'user', content: userContent }
-        ]
-      })
-    });
-
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      const msg = errBody?.error?.message || `Request failed (HTTP ${res.status}).`;
-      feedbackOutput.innerHTML = `<div class="feedback-error">${msg}</div>`;
-      return;
-    }
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content?.trim();
-    if (!text) {
-      feedbackOutput.innerHTML = `<div class="feedback-error">No feedback came back — try again.</div>`;
-      return;
+    let text;
+    if (providerKey === 'gemini') {
+      text = await callGemini(key);
+    } else if (providerKey === 'openrouter') {
+      text = await callOpenAICompatible('https://openrouter.ai/api/v1', key, {
+        'HTTP-Referer': location.origin || 'https://sandy-color-palette-fixer.local',
+        'X-Title': 'Sandy Color Palette Fixer'
+      });
+    } else {
+      text = await callOpenAICompatible('https://api.openai.com/v1', key);
     }
     feedbackOutput.innerHTML = `<div class="feedback-text">${renderFeedbackMarkdownish(text)}</div>`;
+    aiFeedbackSnapshot = currentReviewSnapshot();
   } catch (err) {
-    feedbackOutput.innerHTML = `<div class="feedback-error">Couldn't reach OpenAI from this browser. Check your connection and API key, then try again.</div>`;
+    feedbackOutput.innerHTML = `<div class="feedback-error">${err.message || `Couldn't reach the provider from this browser. Check your connection and API key, then try again.`}</div>`;
   }
 }
 
@@ -901,13 +1058,106 @@ function copyHexList() {
     .catch(() => showToast('Could not copy — select and copy manually'));
 }
 
+/* ---------- color-blind safety check ---------- */
+// Simplified simulation matrices (approximate; applied directly to sRGB 0-1,
+// not linearized — good enough for a quick design-time warning, not a
+// clinically precise simulator).
+const CB_MATRICES = {
+  protanopia: { label: 'Protanopia (red-weak)', m: [[0.567, 0.433, 0], [0.558, 0.442, 0], [0, 0.242, 0.758]] },
+  deuteranopia: { label: 'Deuteranopia (green-weak)', m: [[0.625, 0.375, 0], [0.7, 0.3, 0], [0, 0.3, 0.7]] },
+  tritanopia: { label: 'Tritanopia (blue-weak)', m: [[0.95, 0.05, 0], [0, 0.433, 0.567], [0, 0.475, 0.525]] },
+};
+
+function colorDistance(hexA, hexB) {
+  // "redmean" — a cheap but much more perceptually accurate distance than plain Euclidean RGB
+  const a = hexToRgb(hexA), b = hexToRgb(hexB);
+  const rMean = (a.r + b.r) / 2;
+  const dr = a.r - b.r, dg = a.g - b.g, db = a.b - b.b;
+  return Math.sqrt((2 + rMean / 256) * dr * dr + 4 * dg * dg + (2 + (255 - rMean) / 256) * db * db);
+}
+
+function simulateColorBlindness(hex, matrix) {
+  const { r, g, b } = hexToRgb(hex);
+  const R = r / 255, G = g / 255, B = b / 255;
+  const nr = matrix[0][0] * R + matrix[0][1] * G + matrix[0][2] * B;
+  const ng = matrix[1][0] * R + matrix[1][1] * G + matrix[1][2] * B;
+  const nb = matrix[2][0] * R + matrix[2][1] * G + matrix[2][2] * B;
+  return rgbToHex({ r: nr * 255, g: ng * 255, b: nb * 255 });
+}
+
+function findColorBlindConfusions() {
+  const unique = [...new Map(palette.map(c => [c.hex, c])).values()];
+  const results = [];
+  Object.entries(CB_MATRICES).forEach(([key, { label, m }]) => {
+    for (let i = 0; i < unique.length; i++) {
+      for (let j = i + 1; j < unique.length; j++) {
+        const a = unique[i], b = unique[j];
+        const originalDist = colorDistance(a.hex, b.hex);
+        if (originalDist < 100) continue; // already similar in typical vision — not a CB-specific issue
+        const simA = simulateColorBlindness(a.hex, m);
+        const simB = simulateColorBlindness(b.hex, m);
+        const simDist = colorDistance(simA, simB);
+        // flag when the simulated distance both drops sharply relative to normal vision
+        // and lands in an absolute range where colors read as near-identical
+        if (simDist < 220 && simDist < originalDist * 0.65) {
+          results.push({ type: key, label, a: a.hex, b: b.hex });
+        }
+      }
+    }
+  });
+  return results.slice(0, 4);
+}
+
+function renderColorBlindCheck() {
+  const box = document.getElementById('colorBlindResults');
+  const unique = [...new Map(palette.map(c => [c.hex, c])).values()];
+  if (unique.length < 2) {
+    box.innerHTML = `<p class="card-sub" style="margin:0;">Add at least two colors to run this check.</p>`;
+    return;
+  }
+  const issues = findColorBlindConfusions();
+  if (issues.length === 0) {
+    box.innerHTML = `<div class="cb-clean">✓ No confusable pairs detected across common color-vision types.</div>`;
+    return;
+  }
+  box.innerHTML = issues.map(issue => `
+    <div class="cb-issue">
+      <span class="cb-tag">${issue.type.slice(0, 4)}</span>
+      <span class="cb-swatches">
+        <span class="cb-swatch" style="background:${issue.a}"></span>
+        <span class="cb-swatch" style="background:${issue.b}"></span>
+      </span>
+      <span class="cb-desc"><strong>${issue.a}</strong> and <strong>${issue.b}</strong> may look nearly identical under ${issue.label}.</span>
+    </div>
+  `).join('');
+}
+
 /* ---------- render orchestration ---------- */
+/* ---------- staleness tracking for reviews ---------- */
+let freeReviewHasRun = false;
+let aiFeedbackSnapshot = null; // set when an AI review last succeeded
+
+function currentReviewSnapshot() {
+  return JSON.stringify(palette.map(c => `${c.hex}:${c.role}`)) + '|' +
+    (designImage ? `${designImage.name}:${designImage.dataUrl.length}` : 'no-image');
+}
+
+function updateAiStaleNote() {
+  const note = document.getElementById('aiStaleNote');
+  if (!note) return;
+  const stale = aiFeedbackSnapshot !== null && aiFeedbackSnapshot !== currentReviewSnapshot();
+  note.style.display = stale ? 'block' : 'none';
+}
+
 function renderAll() {
   renderPalette();
   renderHealth();
   renderHarmony();
   renderSuggestions();
   renderContrast();
+  renderColorBlindCheck();
+  if (freeReviewHasRun) renderFreeReview(); // keep the free review in sync with the live palette
+  updateAiStaleNote();
 }
 
 /* ---------- events ---------- */

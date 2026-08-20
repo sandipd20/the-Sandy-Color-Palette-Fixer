@@ -1,5 +1,5 @@
 /* ============================================
-   the Sandy Color Palette Fixer — design tokens
+   Palette Fixer — design tokens
    Paper canvas so user colors stay the subject.
    Signature: violet "fix beam" + circular health ring.
    ============================================ */
@@ -723,6 +723,67 @@ button:focus-visible {
   flex: none;
 }
 
+/* ---------- color-blind safety ---------- */
+.cb-clean {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green);
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 4px 2px;
+}
+
+.cb-issue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  margin-bottom: 8px;
+  background: var(--paper);
+}
+
+.cb-issue:last-child {
+  margin-bottom: 0;
+}
+
+.cb-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  background: var(--violet-soft);
+  color: var(--violet-deep);
+  border-radius: 6px;
+  padding: 3px 7px;
+  flex: none;
+}
+
+.cb-swatches {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.cb-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, .08);
+}
+
+.cb-desc {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.cb-desc strong {
+  color: var(--ink);
+}
+
 /* ---------- export ---------- */
 .export-list {
   display: flex;
@@ -1047,10 +1108,52 @@ button:focus-visible {
   margin: 22px 0 18px;
 }
 
+.free-review-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.free-review-row h4 {
+  margin: 0 0 4px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px;
+}
+
+.free-review-row .btn-primary {
+  flex: none;
+  background: var(--violet);
+}
+
+.free-review-row .btn-primary:hover {
+  background: var(--violet-deep);
+}
+
 .ai-head h4 {
   margin: 0 0 4px;
   font-family: 'Space Grotesk', sans-serif;
   font-size: 15px;
+}
+
+.provider-row {
+  margin-bottom: 10px;
+}
+
+.provider-select {
+  width: 100%;
+  font-weight: 600;
+}
+
+.ai-stale-note {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  line-height: 1.5;
 }
 
 .ai-key-row {
@@ -1398,6 +1501,15 @@ button:focus-visible {
   .ai-key-sub {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .free-review-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .free-review-row .btn-primary {
+    width: 100%;
   }
 }
 
